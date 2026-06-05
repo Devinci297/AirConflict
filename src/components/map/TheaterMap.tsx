@@ -1,33 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
-import type { FeatureCollection } from 'geojson';
-import type { Camera, Viewport } from '../../lib/mapUtils';
-import { MapRenderer } from './MapRenderer';
+import { useState } from 'react';
+import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { useGameStore } from '../../stores/gameStore';
 import { LayerControls } from './LayerControls';
 import type { LayerVisibility } from './LayerControls';
-import { useGameStore } from '../../stores/gameStore';
-import * as topojson from 'topojson-client';
 
-// Initial Pacific Theater camera
-const INITIAL_CAMERA: Camera = {
-  centerLat: 27.5,
-  centerLon: 132.5,
-  scale: 40, // pixels per degree
-  zoomLevel: 0,
+// Custom icons for bases
+const createBaseIcon = (type: 'MOB' | 'FOS', name: string) => {
+  const isMob = type === 'MOB';
+  const size = isMob ? 16 : 12;
+  const shapeClass = isMob ? 'rounded-sm' : 'rotate-45';
+  
+  return L.divIcon({
+    className: 'bg-transparent border-none',
+    html: `
+      <div class="relative flex items-center justify-center pointer-events-none">
+        <div class="bg-[#4a90d9] border border-white shadow-[0_0_8px_rgba(74,144,217,0.8)] ${shapeClass}" style="width: ${size}px; height: ${size}px;"></div>
+        ${isMob ? `<div class="absolute left-6 text-[#e0e6ed] font-mono text-[10px] whitespace-nowrap bg-[#0a1628]/80 px-1 py-0.5 rounded pointer-events-auto">${name}</div>` : ''}
+      </div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
 };
 
 export function TheaterMap() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const geoCanvasRef = useRef<HTMLCanvasElement>(null);
-  const featuresCanvasRef = useRef<HTMLCanvasElement>(null);
-  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const entitiesCanvasRef = useRef<HTMLCanvasElement>(null);
-  const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const rendererRef = useRef<MapRenderer | null>(null);
-  
-  const [camera, setCamera] = useState<Camera>(INITIAL_CAMERA);
-  const [isDragging, setIsDragging] = useState(false);
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const gameState = useGameStore();
   
   const [layers, setLayers] = useState<LayerVisibility>({
     terrain: true,
@@ -37,149 +36,46 @@ export function TheaterMap() {
     routes: true,
   });
 
-  // Load Game State
-  const gameState = useGameStore((state) => state);
-
-  useEffect(() => {
-    if (!containerRef.current || !geoCanvasRef.current || !featuresCanvasRef.current || 
-        !overlayCanvasRef.current || !entitiesCanvasRef.current || !cursorCanvasRef.current) {
-      return;
-    }
-
-    const { clientWidth: width, clientHeight: height } = containerRef.current;
-    const viewport: Viewport = { width, height };
-
-    const renderer = new MapRenderer(
-      geoCanvasRef.current,
-      featuresCanvasRef.current,
-      overlayCanvasRef.current,
-      entitiesCanvasRef.current,
-      cursorCanvasRef.current,
-      viewport,
-      camera
-    );
-    
-    rendererRef.current = renderer;
-
-    // Fetch high-resolution Natural Earth 10m data
-    fetch('https://unpkg.com/world-atlas@2.0.2/countries-10m.json')
-      .then(res => res.json())
-      .then(topology => {
-        // Convert TopoJSON to GeoJSON
-        const geoData = topojson.feature(topology, topology.objects.countries);
-        renderer.setGeoData(geoData as unknown as FeatureCollection);
-      })
-      .catch(err => console.error("Failed to load map data:", err));
-
-    renderer.start();
-
-    const handleResize = () => {
-      if (containerRef.current && rendererRef.current) {
-        rendererRef.current.setViewport({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      renderer.stop();
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  // Use a native event listener with passive: false to prevent default scroll wheel behavior
-  useEffect(() => {
-    const handleWheelNative = (e: WheelEvent) => {
-      e.preventDefault();
-      
-      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      setCamera(prev => {
-        const newScale = Math.max(10, Math.min(5000, prev.scale * zoomFactor));
-        return {
-          ...prev,
-          scale: newScale,
-        };
-      });
-    };
-
-    const node = containerRef.current;
-    if (node) {
-      node.addEventListener('wheel', handleWheelNative, { passive: false });
-    }
-
-    return () => {
-      if (node) {
-        node.removeEventListener('wheel', handleWheelNative);
-      }
-    };
-  }, []);
-
-  // Update renderer when camera changes
-  useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.setCamera(camera);
-    }
-  }, [camera]);
-
-  // Update renderer when game state changes
-  useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.setGameState(gameState as any);
-    }
-  }, [gameState]);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setLastMousePos({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    
-    const dx = e.clientX - lastMousePos.x;
-    const dy = e.clientY - lastMousePos.y;
-    
-    const latCorrection = Math.cos((camera.centerLat * Math.PI) / 180);
-    const dLon = -dx / (camera.scale * latCorrection);
-    const dLat = dy / camera.scale;
-    
-    setCamera(prev => ({
-      ...prev,
-      centerLon: prev.centerLon + dLon,
-      centerLat: Math.max(-89, Math.min(89, prev.centerLat + dLat)),
-    }));
-    
-    setLastMousePos({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const canvasClass = "absolute top-0 left-0 w-full h-full cursor-crosshair";
+  // CartoDB Dark Matter (No labels, we'll let our UI handle labels if needed, or use the labeled variant)
+  const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
   return (
-    <div 
-      className="relative w-full h-screen bg-[#0a1628] overflow-hidden" 
-      ref={containerRef}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
+    <div className="relative w-full h-screen bg-[#0a1628]">
       <LayerControls visibility={layers} onChange={setLayers} />
       
-      <canvas ref={geoCanvasRef} className={canvasClass} style={{ zIndex: 1, opacity: layers.terrain ? 1 : 0 }} />
-      <canvas ref={featuresCanvasRef} className={canvasClass} style={{ zIndex: 10, opacity: layers.bases ? 1 : 0 }} />
-      <canvas ref={overlayCanvasRef} className={canvasClass} style={{ zIndex: 20 }} />
-      <canvas ref={entitiesCanvasRef} className={canvasClass} style={{ zIndex: 30 }} />
-      <canvas ref={cursorCanvasRef} className={canvasClass} style={{ zIndex: 40 }} />
+      <MapContainer 
+        center={[27.5, 132.5]} 
+        zoom={5} 
+        zoomControl={false}
+        className="w-full h-full z-0 cursor-crosshair bg-[#0a1628]"
+      >
+        {layers.terrain && (
+          <TileLayer
+            url={TILE_URL}
+            attribution={TILE_ATTRIBUTION}
+          />
+        )}
+        
+        {/* Render Bases */}
+        {layers.bases && Object.values(gameState.bases || {}).map((base) => (
+          <Marker 
+            key={base.id} 
+            position={[base.location.lat, base.location.lon]}
+            icon={createBaseIcon(base.type, base.name)}
+          >
+            <Tooltip direction="top" offset={[0, -10]} opacity={1} className="bg-[#0a1628] text-[#e0e6ed] border-[#2a3f5a] font-mono rounded">
+              <div className="font-bold text-[#4a90d9]">{base.name}</div>
+              <div className="text-xs">{base.type} • {base.status}</div>
+            </Tooltip>
+          </Marker>
+        ))}
+      </MapContainer>
       
-      {/* HUD Info */}
-      <div className="absolute bottom-4 left-4 z-50 text-[#90a4be] text-xs font-mono bg-[#0a1628]/80 px-2 py-1 rounded">
-        LAT: {camera.centerLat.toFixed(4)}° / LON: {camera.centerLon.toFixed(4)}° | SCALE: {camera.scale.toFixed(1)}
+      {/* Target Crosshair in Center for aesthetics (optional) */}
+      <div className="absolute top-1/2 left-1/2 w-4 h-4 -mt-2 -ml-2 pointer-events-none z-10 opacity-30">
+        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white"></div>
+        <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white"></div>
       </div>
     </div>
   );
