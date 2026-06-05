@@ -41,7 +41,7 @@ export function TheaterMap() {
   const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
   return (
-    <div className="relative w-full h-screen bg-[#0a1628]">
+    <div className="relative w-full h-full bg-[#0a1628]">
       <LayerControls visibility={layers} onChange={setLayers} />
       
       <MapContainer 
@@ -49,6 +49,7 @@ export function TheaterMap() {
         zoom={5} 
         zoomControl={false}
         className="w-full h-full z-0 cursor-crosshair bg-[#0a1628]"
+        style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0 }}
       >
         {layers.terrain && (
           <TileLayer

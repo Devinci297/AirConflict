@@ -1,28 +1,22 @@
-import { BrowserRouter, Routes, Route } from 'react-router';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
-import { TheaterMap } from './components/map/TheaterMap';
+import { CAOCDashboard } from './rooms/CAOC/CAOCDashboard';
 import { useGameStore } from './stores/gameStore';
 import { createGameState } from './lib/gameStateFactory';
-import { PACIFIC_STORM } from './config/scenarios/pacific-storm';
-
-// Placeholders for routes
-const Landing = () => <TheaterMap />;
-const Lobby = () => <div className="p-4">Lobby (Placeholder)</div>;
-const Game = () => <div className="p-4">Game Session (Placeholder)</div>;
 
 function App() {
+  // Initialize the scenario exactly once on boot
   useEffect(() => {
-    // Initialize the Zustand store with the Pacific Storm scenario for testing the map
-    const initialState = createGameState(PACIFIC_STORM);
+    console.log("Initializing Pacific Storm Scenario...");
+    const initialState = createGameState('PACIFIC_STORM');
     useGameStore.setState(initialState);
   }, []);
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/lobby" element={<Lobby />} />
-        <Route path="/game/:sessionId" element={<Game />} />
+        {/* Temporarily routing root directly to the CAOC Dashboard for Sprint 4 testing */}
+        <Route path="/" element={<CAOCDashboard />} />
       </Routes>
     </BrowserRouter>
   );
