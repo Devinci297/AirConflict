@@ -7,7 +7,7 @@ interface GameState {
   // TODO: Add more game state properties from GDD
 }
 
-export const useGameStore = create<GameState>((set) => ({
+export const useGameStore = create<GameState>(() => ({
   phase: 'PLANNING',
   tickRate: 1,
 }));
