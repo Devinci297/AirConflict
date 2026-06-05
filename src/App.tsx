@@ -3,12 +3,13 @@ import { useEffect } from 'react';
 import { CAOCDashboard } from './rooms/CAOC/CAOCDashboard';
 import { useGameStore } from './stores/gameStore';
 import { createGameState } from './lib/gameStateFactory';
+import { PACIFIC_STORM } from './config/scenarios/pacific-storm';
 
 function App() {
   // Initialize the scenario exactly once on boot
   useEffect(() => {
     console.log("Initializing Pacific Storm Scenario...");
-    const initialState = createGameState('PACIFIC_STORM');
+    const initialState = createGameState(PACIFIC_STORM);
     useGameStore.setState(initialState);
   }, []);
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useGameStore } from '../../stores/gameStore';
@@ -25,11 +25,35 @@ const createBaseIcon = (type: 'MOB' | 'FOS', name: string) => {
   });
 };
 
+// Style function for Hex Grid
+const getHexStyle = (feature: any) => {
+  const owner = feature.properties?.owner;
+  let color = 'transparent';
+  let fillOpacity = 0.0;
+  
+  if (owner === 'BLUE') {
+    color = '#4a90d9';
+    fillOpacity = 0.15;
+  } else if (owner === 'RED') {
+    color = '#e74c3c';
+    fillOpacity = 0.15;
+  }
+
+  return {
+    color: color,
+    weight: 1,
+    opacity: 0.3,
+    fillColor: color,
+    fillOpacity: fillOpacity,
+  };
+};
+
 export function TheaterMap() {
   const gameState = useGameStore();
   
   const [layers, setLayers] = useState<LayerVisibility>({
     terrain: true,
+    territory: true,
     bases: true,
     opfor: true,
     samRings: true,
@@ -55,6 +79,14 @@ export function TheaterMap() {
           <TileLayer
             url={TILE_URL}
             attribution={TILE_ATTRIBUTION}
+          />
+        )}
+        
+        {/* Render Hex Territory Grid */}
+        {layers.territory && gameState.territory && (
+          <GeoJSON 
+            data={gameState.territory} 
+            style={getHexStyle} 
           />
         )}
         

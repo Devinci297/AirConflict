@@ -3,6 +3,7 @@ import type { Base } from './bases';
 import type { Satellite } from './space';
 import type { EnemyAircraft, SAMSite, OpforAIState } from './opfor';
 import type { GameMessage } from './messages';
+import type { FeatureCollection, Polygon } from 'geojson';
 
 export type GamePhase = 'PLANNING' | 'EXECUTION' | 'ASSESSMENT';
 
@@ -40,6 +41,8 @@ export interface GameState {
   phase: GamePhase;
   time: TimeState;
   
+  territory?: FeatureCollection<Polygon, { owner: 'BLUE' | 'RED' | 'NEUTRAL' }>;
+
   // Players
   players: Record<string, { role: string; roomId: string; name: string }>;
   

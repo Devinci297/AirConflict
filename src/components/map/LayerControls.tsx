@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 export interface LayerVisibility {
   terrain: boolean;
+  territory: boolean;
   bases: boolean;
   opfor: boolean;
   samRings: boolean;

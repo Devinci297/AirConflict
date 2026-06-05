@@ -1,8 +1,10 @@
+import { hexGrid } from '@turf/turf';
 import type { GameState } from '../types/game';
 import type { ScenarioConfig } from '../config/scenarios/pacific-storm';
 import type { Base, MOB, FOS } from '../types/bases';
 import type { Aircraft } from '../types/units';
 import type { MunitionType } from '../types/supplies';
+import type { FeatureCollection, Polygon } from 'geojson';
 
 function generateId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).substring(2, 9)}`;
@@ -69,6 +71,36 @@ export function createGameState(scenario: ScenarioConfig): GameState {
     bases[baseRecord.id] = baseRecord;
   });
 
+  // 2. Generate Territorial Hex Grid
+  const bbox = [100, 0, 150, 50] as [number, number, number, number]; // minLon, minLat, maxLon, maxLat
+  const cellSide = 100; // 100km radius
+  const rawGrid = hexGrid(bbox, cellSide, { units: 'kilometers' });
+
+  const territory: FeatureCollection<Polygon, { owner: 'BLUE' | 'RED' | 'NEUTRAL' }> = {
+    type: 'FeatureCollection',
+    features: rawGrid.features.map(f => {
+      // Rough center approximation from the first vertex
+      const lon = f.geometry.coordinates[0][0][0];
+      const lat = f.geometry.coordinates[0][0][1];
+      
+      let owner: 'BLUE' | 'RED' | 'NEUTRAL' = 'NEUTRAL';
+      
+      // Rough geopolitical bounding boxes
+      if (lon < 123 && lat > 20) {
+        owner = 'RED'; // Mainland China / NK
+      } else if (lon >= 123 && lon < 145 && lat > 20) {
+        owner = 'BLUE'; // Japan / Taiwan / East China Sea
+      } else if (lon > 135 && lat <= 20) {
+        owner = 'BLUE'; // Guam area
+      }
+      
+      return {
+        ...f,
+        properties: { owner }
+      } as any;
+    })
+  };
+
   // Return the complete initial state
   return {
     phase: 'PLANNING',
@@ -77,6 +109,7 @@ export function createGameState(scenario: ScenarioConfig): GameState {
       tickRate: 0, // Paused initially
       cycleNumber: 1,
     },
+    territory,
     players: {},
     bases,
     aircraft,
