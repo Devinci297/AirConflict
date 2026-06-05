@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FeatureCollection } from 'geojson';
-import { Camera, Viewport } from '../../lib/mapUtils';
+import type { Camera, Viewport } from '../../lib/mapUtils';
 import { MapRenderer } from './MapRenderer';
-import { LayerControls, LayerVisibility } from './LayerControls';
+import { LayerControls } from './LayerControls';
+import type { LayerVisibility } from './LayerControls';
 import { useGameStore } from '../../stores/gameStore';
+import * as topojson from 'topojson-client';
 
 // Initial Pacific Theater camera
 const INITIAL_CAMERA: Camera = {
@@ -59,18 +61,13 @@ export function TheaterMap() {
     
     rendererRef.current = renderer;
 
-    // Fetch basic world GeoJSON for the prototype
-    fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json')
+    // Fetch high-resolution Natural Earth 10m data
+    fetch('https://unpkg.com/world-atlas@2.0.2/countries-10m.json')
       .then(res => res.json())
-      .then(topoData => {
-        // We'll use topojson-client to convert it, but let's fetch a direct GeoJSON instead for simplicity 
-        // to avoid adding topojson-client right now unless necessary.
-        // Actually, fetching from a reliable geojson source:
-        return fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json');
-      })
-      .then(res => res.json())
-      .then(geoData => {
-        renderer.setGeoData(geoData as FeatureCollection);
+      .then(topology => {
+        // Convert TopoJSON to GeoJSON
+        const geoData = topojson.feature(topology, topology.objects.countries);
+        renderer.setGeoData(geoData as unknown as FeatureCollection);
       })
       .catch(err => console.error("Failed to load map data:", err));
 
@@ -92,6 +89,33 @@ export function TheaterMap() {
     };
   }, []);
 
+  // Use a native event listener with passive: false to prevent default scroll wheel behavior
+  useEffect(() => {
+    const handleWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      setCamera(prev => {
+        const newScale = Math.max(10, Math.min(5000, prev.scale * zoomFactor));
+        return {
+          ...prev,
+          scale: newScale,
+        };
+      });
+    };
+
+    const node = containerRef.current;
+    if (node) {
+      node.addEventListener('wheel', handleWheelNative, { passive: false });
+    }
+
+    return () => {
+      if (node) {
+        node.removeEventListener('wheel', handleWheelNative);
+      }
+    };
+  }, []);
+
   // Update renderer when camera changes
   useEffect(() => {
     if (rendererRef.current) {
@@ -102,8 +126,6 @@ export function TheaterMap() {
   // Update renderer when game state changes
   useEffect(() => {
     if (rendererRef.current) {
-      // Create a full GameState object since our store currently only has phase and tickRate
-      // For now, we'll cast it to any to bypass strict type checking until store is fully implemented
       rendererRef.current.setGameState(gameState as any);
     }
   }, [gameState]);
@@ -119,7 +141,6 @@ export function TheaterMap() {
     const dx = e.clientX - lastMousePos.x;
     const dy = e.clientY - lastMousePos.y;
     
-    // Convert screen pixel delta to lat/lon delta
     const latCorrection = Math.cos((camera.centerLat * Math.PI) / 180);
     const dLon = -dx / (camera.scale * latCorrection);
     const dLat = dy / camera.scale;
@@ -137,32 +158,16 @@ export function TheaterMap() {
     setIsDragging(false);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    
-    // Zoom factor
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(10, Math.min(5000, camera.scale * zoomFactor));
-    
-    setCamera(prev => ({
-      ...prev,
-      scale: newScale,
-      // Logic for changing zoomLevel based on scale thresholds could go here
-    }));
-  };
-
-  // Canvas styling for stacking
   const canvasClass = "absolute top-0 left-0 w-full h-full cursor-crosshair";
 
   return (
     <div 
-      className="relative w-full h-full bg-[#0a1628] overflow-hidden" 
+      className="relative w-full h-screen bg-[#0a1628] overflow-hidden" 
       ref={containerRef}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
     >
       <LayerControls visibility={layers} onChange={setLayers} />
       
